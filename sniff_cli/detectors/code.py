@@ -18,12 +18,12 @@ class CodeDetector:
         try:
             tree = ast.parse(diff)
             # AST parsed successfully, we can do structural analysis
-            return self._analyze_ast(tree, total_lines)
+            return self._analyze_ast(tree, total_lines, diff)
         except SyntaxError:
             # Not valid python or a partial snippet. Fall back to heuristical entropy
             return self._analyze_raw(diff, total_lines)
 
-    def _analyze_ast(self, tree, total_lines):
+    def _analyze_ast(self, tree, total_lines, diff):
         score = 0.0
         reasons = []
 
@@ -52,6 +52,7 @@ class CodeDetector:
         # 6. Absence of human development traces
         # Humans leave traces (console.log, comments, debugger) in medium/large diffs. 
         # Perfect, silent code blocks of >30 lines are highly suspicious.
+        lines = diff.split('\n')
         human_noise_markers = sum(1 for line in lines if re.search(r'(TODO|FIXME|console\.log|debugger|print\(|#)', line, re.IGNORECASE))
         if total_lines > 30 and human_noise_markers == 0:
             score += 0.3
@@ -63,6 +64,32 @@ class CodeDetector:
         if total_lines > 50:
             score += 0.2
             reasons.append("Large structural block addition")
+
+        # --- New Heuristic: AI Comment Quality & Density ---
+        ai_comment_phrases = [
+            r"this function", r"this method", r"we first", r"next we",
+            r"finally we", r"handle the case", r"edge case", r"helper function"
+        ]
+        
+        ai_phrases_found = 0
+        for node in ast.walk(tree):
+             if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.Module)):
+                  doc = ast.get_docstring(node)
+                  if doc:
+                       doc_lower = doc.lower()
+                       for phrase in ai_comment_phrases:
+                            if phrase in doc_lower:
+                                 ai_phrases_found += 1
+                                 
+        if ai_phrases_found >= 2:
+             score += 0.3
+             reasons.append(f"AI-style heavily expository commenting ({ai_phrases_found} AI phrases detected in docstrings)")
+             
+        # Catch line-by-line commenting pattern (e.g. # 1. Do X \n code \n # 2. Do Y \n code)
+        comment_lines_count = sum(1 for line in lines if line.strip().startswith('#') or line.strip().startswith('//'))
+        if total_lines > 15 and (comment_lines_count / total_lines) >= 0.25:
+             score += 0.4
+             reasons.append(f"Excessive line-by-line commentary ({comment_lines_count} comment lines) - highly indicative of AI generation")
 
         return {"score": min(score, 1.0), "reason": "; ".join(reasons) if reasons else "Organic AST structural complexity"}
 

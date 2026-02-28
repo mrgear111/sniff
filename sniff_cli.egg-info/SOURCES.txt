@@ -11,6 +11,10 @@ sniff_cli.egg-info/entry_points.txt
 sniff_cli.egg-info/requires.txt
 sniff_cli.egg-info/top_level.txt
 sniff_cli/detectors/__init__.py
+sniff_cli/detectors/baseline.py
 sniff_cli/detectors/code.py
+sniff_cli/detectors/llm.py
 sniff_cli/detectors/scoring.py
+sniff_cli/detectors/semantic.py
+sniff_cli/detectors/structural.py
 sniff_cli/detectors/text.py

@@ -86,7 +86,25 @@ def render_verdict(results: list):
         return
     
     scores = [r["score"] for r in results]
-    raw_avg = sum(scores) / len(scores)
+    
+    if len(scores) > 0:
+        true_mean = sum(scores) / len(scores)
+        top_scores = sorted(scores, reverse=True)[:max(1, int(len(scores) * 0.20))]
+        top_20_mean = sum(top_scores) / len(top_scores)
+        
+        # Count severe violations
+        high_ai_count = sum(1 for s in scores if s >= 0.7)
+        ai_density = high_ai_count / len(scores)
+        
+        if ai_density >= 0.15: # Blatant AI presence -> aggressive anchoring
+            raw_avg = top_20_mean
+        elif high_ai_count > 0: # Some infractions -> mixed blend
+            raw_avg = (true_mean + top_20_mean) / 2
+        else: # Pure human / no severe spikes -> stick to true mathematical mean
+            raw_avg = true_mean
+    else:
+        raw_avg = 0.0
+        
     avg_score = raw_avg
     high_ai_count = sum(1 for s in scores if s >= 0.7)
     

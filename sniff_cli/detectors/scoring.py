@@ -16,11 +16,11 @@ class ScoreAggregator:
     def __init__(self):
         self.weights = {
             "text":       0.10,
-            "code":       0.50,
+            "code":       0.35,
             "structural": 0.15,
             "similarity": 0.15,
             "semantic":   0.10,
-            "baseline":   0.15,
+            "velocity":   0.15,
         }
 
     def compute(
@@ -39,17 +39,7 @@ class ScoreAggregator:
         semantic_res   = semantic_res   or {"score": 0.0, "reason": ""}
         baseline_res   = baseline_res   or {"score": 0.0, "reason": ""}
 
-        # Weighted base score from all 6 signal engines
-        final_score = (
-            text_res.get("score", 0.0)       * self.weights["text"] +
-            code_res.get("score", 0.0)       * self.weights["code"] +
-            structural_res.get("score", 0.0) * self.weights["structural"] +
-            similarity_res.get("score", 0.0) * self.weights["similarity"] +
-            semantic_res.get("score", 0.0)   * self.weights["semantic"] +
-            baseline_res.get("score", 0.0)   * self.weights["baseline"]
-        )
-
-        # Velocity bonus
+        # Calculate Velocity Score (0 to 1 scale)
         v_score = 0.0
         v_reason = None
         if velocity_lpm > 50:
@@ -58,13 +48,21 @@ class ScoreAggregator:
         elif velocity_lpm > 20:
             v_score = 0.6
             v_reason = f"Abnormally high commit velocity ({velocity_lpm:.0f} Lines/Minute)"
-        final_score += v_score * 0.15  # velocity is an additive bonus
+
+        # Weighted base score from the chosen core engines
+        final_score = (
+            text_res.get("score", 0.0)       * self.weights["text"] +
+            code_res.get("score", 0.0)       * self.weights["code"] +
+            structural_res.get("score", 0.0) * self.weights["structural"] +
+            similarity_res.get("score", 0.0) * self.weights["similarity"] +
+            semantic_res.get("score", 0.0)   * self.weights["semantic"] +
+            v_score                          * self.weights["velocity"]
+        )
 
         # Burst bonus
         if burst_score > 0:
             final_score += 0.1
         
-        # Amplification: any single strong signal (>0.5) pushes score up
         all_scores = [
             text_res.get("score", 0.0),
             code_res.get("score", 0.0),
@@ -73,8 +71,6 @@ class ScoreAggregator:
             semantic_res.get("score", 0.0),
             baseline_res.get("score", 0.0),
         ]
-        if any(s >= 0.5 for s in all_scores):
-            final_score += 0.20  # boosted jump
         
         # If multiple engines suspect AI even slightly, drastically raise confidence
         suspect_engines = sum(1 for s in all_scores if s >= 0.3)

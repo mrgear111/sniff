@@ -13,12 +13,13 @@ from sniff_cli.detectors.scoring import ScoreAggregator
 from sniff_cli.detectors.baseline import AuthorBaseline
 from sniff_cli.detectors.structural import analyze_structural_regularity, SimHashIndex
 from sniff_cli.detectors.semantic import SemanticDetector
+from sniff_cli.detectors.llm import LLMAnalyzer
 from sniff_cli.ui import print_welcome, build_results_table, build_stats_table, format_score, format_reasons, display_scan_progress, render_trend_chart, render_verdict
 
 console = Console()
 app = typer.Typer(help="Sniff AI Contribution Detection CLI", add_completion=False)
 
-def _get_analysis_data(path: str, count: int):
+def _get_analysis_data(path: str, count: int, use_llm: bool = True):
     repo = get_repo(path)
     if not repo:
         return None, f"'{path}' is not a valid Git repository."
@@ -30,6 +31,7 @@ def _get_analysis_data(path: str, count: int):
     text_detector = TextDetector()
     code_detector = CodeDetector()
     semantic_detector = SemanticDetector()
+    llm_analyzer = LLMAnalyzer()
     simhash_index = SimHashIndex(similarity_threshold=0.82)
     aggregator = ScoreAggregator()
 
@@ -101,6 +103,17 @@ def _get_analysis_data(path: str, count: int):
             baseline_res=baseline_res,
         )
 
+        # --- LLM Tie-Breaker for Borderline Commits ---
+        # If the ML engines are unsure (score between 0.35 and 0.50), let Claude decide
+        if use_llm and (0.35 <= final_res["score"] <= 0.50):
+            llm_res = llm_analyzer.analyze(diff, message)
+            if llm_res["score"] != -1.0:
+                final_res["score"] = llm_res["score"]
+                final_res["reasons"].append(llm_res["reason"])
+                final_res["reasons"].append("Local engines returned borderline score. Final score was determined by LLM.")
+
+        final_res["band"] = "Likely AI-assisted" if final_res["score"] > 0.50 else "Likely Human" if final_res["score"] < 0.20 else "Mixed / Uncertain"
+
         results.append({
             "hash": commit.hexsha,
             "short_hash": commit.hexsha[:7],
@@ -116,13 +129,14 @@ def _get_analysis_data(path: str, count: int):
 def scan_cmd(
     path: str = typer.Option(".", help="Path to the Git repository"), 
     count: int = typer.Option(10, help="Number of commits to scan"),
-    export_json: bool = typer.Option(False, "--json", help="Export results as JSON")
+    export_json: bool = typer.Option(False, "--json", help="Export results as JSON"),
+    no_llm: bool = typer.Option(False, "--no-llm", help="Disable LLM tie-breaker (pure local engines)")
 ):
     """Scan a repository and compute an AI-Likelihood Score for recent commits."""
     if not export_json:
         display_scan_progress(count)
         
-    results, err = _get_analysis_data(path, count)
+    results, err = _get_analysis_data(path, count, use_llm=not no_llm)
     if err:
         if export_json:
             print(json.dumps({"error": err}))
@@ -152,13 +166,14 @@ def scan_cmd(
 def stats_cmd(
     path: str = typer.Option(".", help="Path to the Git repository"), 
     count: int = typer.Option(50, help="Number of commits to analyze for stats"),
-    export_json: bool = typer.Option(False, "--json", help="Export results as JSON")
+    export_json: bool = typer.Option(False, "--json", help="Export results as JSON"),
+    no_llm: bool = typer.Option(False, "--no-llm", help="Disable LLM tie-breaker (pure local engines)")
 ):
     """Generate repository-level AI usage analytics and an author leaderboard."""
     if not export_json:
         display_scan_progress(count)
 
-    results, err = _get_analysis_data(path, count)
+    results, err = _get_analysis_data(path, count, use_llm=not no_llm)
     if err:
         if export_json:
             print(json.dumps({"error": err}))
@@ -303,9 +318,9 @@ def interactive_cmd():
             elif command in ["help", "?"]:
                 console.print(Panel(
                     "[bold cyan]Available Commands:[/bold cyan]\n"
-                    "  [bold]scan [count][/bold]   - Scan recent commits for AI generation (default 10)\n"
-                    "  [bold]stats [count][/bold]  - View leaderboard and AI trend charts (default 50)\n"
-                    "  [bold]cd <path>[/bold]      - Change the active repository path\n"
+                    "  [bold]scan [count] [--no-llm][/bold]  - Scan recent commits for AI generation (default 10)\n"
+                    "  [bold]stats [count] [--no-llm][/bold] - View leaderboard and AI trend charts (default 50)\n"
+                    "  [bold]cd <path>[/bold]                 - Change the active repository path\n"
                     "  [bold]theme[/bold]          - Configure terminal syntax colors\n"
                     "  [bold]clear[/bold]          - Clear the terminal screen\n"
                     "  [bold]exit[/bold]           - Quit the session", 
@@ -351,15 +366,19 @@ def interactive_cmd():
                     
             elif command.startswith("scan"):
                 parts = command.split()
+                no_llm_flag = "--no-llm" in parts
+                parts = [p for p in parts if p != "--no-llm"]
                 count = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 10
                 console.print()
-                scan_cmd(path=current_repo, count=count, export_json=False)
+                scan_cmd(path=current_repo, count=count, export_json=False, no_llm=no_llm_flag)
                 
             elif command.startswith("stats"):
                 parts = command.split()
+                no_llm_flag = "--no-llm" in parts
+                parts = [p for p in parts if p != "--no-llm"]
                 count = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 50
                 console.print()
-                stats_cmd(path=current_repo, count=count, export_json=False)
+                stats_cmd(path=current_repo, count=count, export_json=False, no_llm=no_llm_flag)
                 
             elif command == "theme":
                 # Simulated theme selector for the pitch
