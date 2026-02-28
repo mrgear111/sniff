@@ -19,17 +19,22 @@ def get_commit_diff(commit: git.Commit):
         return ""
     
     parent = commit.parents[0]
-    diffs = parent.diff(commit, create_patch=True)
-    
     added_lines = []
-    for d in diffs:
-        # decode diff to string
-        try:
-            diff_text = d.diff.decode('utf-8')
-            for line in diff_text.split('\n'):
-                if line.startswith('+') and not line.startswith('+++'):
-                    added_lines.append(line[1:])
-        except Exception:
-            pass # ignore binary files or decode errors
+    
+    try:
+        diffs = parent.diff(commit, create_patch=True)
+        for d in diffs:
+            # decode diff to string
+            try:
+                # This property access is where GitPython typically triggers the lazy evaluation
+                diff_text = d.diff.decode('utf-8')
+                for line in diff_text.split('\n'):
+                    if line.startswith('+') and not line.startswith('+++'):
+                        added_lines.append(line[1:])
+            except (ValueError, UnicodeDecodeError):
+                pass # ignore binary files or decode errors
+    except git.exc.GitCommandError:
+        # Happens on shallow clones at the boundary commit where the parent tree is missing
+        return ""
             
     return "\n".join(added_lines)

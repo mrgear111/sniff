@@ -49,6 +49,17 @@ class CodeDetector:
             score += 0.3
             reasons.append(f"Low AST lexical entropy (repetitive variable space: {len(vars_assigned)} unique vars)")
 
+        # 6. Absence of human development traces
+        # Humans leave traces (console.log, comments, debugger) in medium/large diffs. 
+        # Perfect, silent code blocks of >30 lines are highly suspicious.
+        human_noise_markers = sum(1 for line in lines if re.search(r'(TODO|FIXME|console\.log|debugger|print\(|#)', line, re.IGNORECASE))
+        if total_lines > 30 and human_noise_markers == 0:
+            score += 0.3
+            reasons.append(f"Large code block ({total_lines} lines) with zero human noise markers (TODOs, logs)")
+        elif total_lines > 60 and human_noise_markers < 2:
+            score += 0.2
+            reasons.append("Unnaturally clean large diff (suspected direct AI paste)")
+
         if total_lines > 50:
             score += 0.2
             reasons.append("Large structural block addition")

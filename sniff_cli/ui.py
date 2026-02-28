@@ -80,6 +80,65 @@ def build_stats_table(repo_name: str) -> Table:
     table.add_column("High-AI Commits (>0.7)", justify="center", style="red")
     return table
 
+def render_verdict(results: list):
+    """Render a bold final summary verdict panel after analysis."""
+    if not results:
+        return
+    
+    scores = [r["score"] for r in results]
+    raw_avg = sum(scores) / len(scores)
+    avg_score = raw_avg
+    high_ai_count = sum(1 for s in scores if s >= 0.7)
+    
+    density_override = False
+    # Force high severity if the repo has a massive density of high-AI commits
+    # Even if they are balanced out by clean human commits
+    if len(scores) > 0 and (high_ai_count / len(scores)) >= 0.25:
+        avg_score = max(avg_score, 0.60)
+        if avg_score > raw_avg:
+            density_override = True
+            
+    pct = int(avg_score * 100)
+    raw_pct = int(raw_avg * 100)
+    
+    if avg_score >= 0.50:
+        verdict_icon = "🔴"
+        verdict_label = "LIKELY AI-ASSISTED"
+        verdict_color = "bold red"
+        risk_msg = "High AI dependency detected. Manual code review strongly recommended."
+    elif avg_score >= 0.25:
+        verdict_icon = "🟡"
+        verdict_label = "MIXED — PARTIALLY AI-ASSISTED"
+        verdict_color = "bold yellow"
+        risk_msg = "Moderate AI usage signals. Some commits warrant closer human review."
+    else:
+        verdict_icon = "🟢"
+        verdict_label = "LIKELY HUMAN-WRITTEN"
+        verdict_color = "bold green"
+        risk_msg = "Low AI usage signals detected across the analyzed commits."
+
+    score_display = f"[{verdict_color}]{pct}%[/{verdict_color}]"
+    if density_override:
+        score_display += f" [dim](Boosted from {raw_pct}% due to critical AI density)[/dim]"
+
+    summary_text = (
+        f"[{verdict_color}]{verdict_icon}  VERDICT: {verdict_label}[/{verdict_color}]\n\n"
+        f"  Overall AI-Likelihood Score : {score_display}\n"
+        f"  Commits Analyzed            : {len(scores)}\n"
+        f"  High-AI Commits (≥70%)      : [bold red]{high_ai_count}[/bold red]\n\n"
+        f"  [dim]{risk_msg}[/dim]"
+    )
+    
+    console.print()
+    console.print(Panel(
+        summary_text,
+        title="[bold]Analysis Complete[/bold]",
+        border_style=verdict_color.replace("bold ", ""),
+        expand=False,
+        padding=(1, 4)
+    ))
+    console.print()
+
 def format_score(score: float, band: str) -> str:
     if score >= 0.7:
         color = "red bold"

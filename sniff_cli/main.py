@@ -10,7 +10,10 @@ from sniff_cli.git_client import get_repo, get_commits, get_commit_diff
 from sniff_cli.detectors.text import TextDetector
 from sniff_cli.detectors.code import CodeDetector
 from sniff_cli.detectors.scoring import ScoreAggregator
-from sniff_cli.ui import print_welcome, build_results_table, build_stats_table, format_score, format_reasons, display_scan_progress, render_trend_chart
+from sniff_cli.detectors.baseline import AuthorBaseline
+from sniff_cli.detectors.structural import analyze_structural_regularity, SimHashIndex
+from sniff_cli.detectors.semantic import SemanticDetector
+from sniff_cli.ui import print_welcome, build_results_table, build_stats_table, format_score, format_reasons, display_scan_progress, render_trend_chart, render_verdict
 
 console = Console()
 app = typer.Typer(help="Sniff AI Contribution Detection CLI", add_completion=False)
@@ -26,38 +29,78 @@ def _get_analysis_data(path: str, count: int):
 
     text_detector = TextDetector()
     code_detector = CodeDetector()
+    semantic_detector = SemanticDetector()
+    simhash_index = SimHashIndex(similarity_threshold=0.82)
     aggregator = ScoreAggregator()
 
-    # Calculate velocities chronologically (oldest first)
+    # Build Author Style Baseline from expanded history
+    all_commits = get_commits(repo, max(count * 3, 60))
+    author_baseline = AuthorBaseline()
+    author_baseline.build_profiles(all_commits, get_commit_diff)
+
+    # Velocity & Burst Detection
     author_last_seen = {}
     commit_velocities = {}
+    author_commit_times = {}
+
     for commit in reversed(commits):
         author = commit.author.name
         timestamp = commit.committed_datetime
         diff = get_commit_diff(commit)
         lines_added = len([l for l in diff.split('\n') if l.strip()])
-        
+
         if author in author_last_seen:
             minutes = (timestamp - author_last_seen[author]).total_seconds() / 60.0
             velocity = lines_added / minutes if minutes > 0 else lines_added
         else:
             velocity = 0.0
-            
+
         author_last_seen[author] = timestamp
         commit_velocities[commit.hexsha] = velocity
 
+        if author not in author_commit_times:
+            author_commit_times[author] = []
+        author_commit_times[author].append((timestamp, commit.hexsha, lines_added))
+
+    # Burst detection: ≥5 large commits in 10-minute window
+    burst_commits = set()
+    for author, entries in author_commit_times.items():
+        entries.sort(key=lambda x: x[0])
+        for i in range(len(entries)):
+            window = [e for e in entries[i:]
+                      if (e[0] - entries[i][0]).total_seconds() <= 600]
+            large_in_window = sum(1 for e in window if e[2] > 20)
+            if len(window) >= 5 and large_in_window >= 3:
+                for e in window:
+                    burst_commits.add(e[1])
+                break
+
     results = []
-    
     for commit in commits:
         author = commit.author.name
         message = commit.message
         diff = get_commit_diff(commit)
+        diff_lines = len([l for l in diff.split('\n') if l.strip()])
 
-        text_res = text_detector.analyze(message)
-        code_res = code_detector.analyze(diff)
-        velocity = commit_velocities.get(commit.hexsha, 0.0)
-        final_res = aggregator.compute(text_res, code_res, velocity_lpm=velocity)
-        
+        text_res       = text_detector.analyze(message, diff_lines=diff_lines)
+        code_res       = code_detector.analyze(diff)
+        structural_res = analyze_structural_regularity(diff)
+        similarity_res = simhash_index.analyze(commit.hexsha, author, diff)
+        semantic_res   = semantic_detector.analyze(message, diff)
+        baseline_res   = author_baseline.analyze_deviation(author, diff)
+        velocity       = commit_velocities.get(commit.hexsha, 0.0)
+        burst_score    = 0.4 if commit.hexsha in burst_commits else 0.0
+
+        final_res = aggregator.compute(
+            text_res, code_res,
+            velocity_lpm=velocity,
+            burst_score=burst_score,
+            structural_res=structural_res,
+            similarity_res=similarity_res,
+            semantic_res=semantic_res,
+            baseline_res=baseline_res,
+        )
+
         results.append({
             "hash": commit.hexsha,
             "short_hash": commit.hexsha[:7],
@@ -67,6 +110,7 @@ def _get_analysis_data(path: str, count: int):
             "reasons": final_res["reasons"]
         })
     return results, None
+
 
 @app.command(name="scan")
 def scan_cmd(
@@ -102,6 +146,7 @@ def scan_cmd(
     # Render the visual chart if not exporting JSON
     if not export_json:
         render_trend_chart(results)
+        render_verdict(results)
 
 @app.command(name="stats")
 def stats_cmd(
@@ -175,6 +220,7 @@ def stats_cmd(
     # Render overall repo trend chart
     if not export_json:
         render_trend_chart(results)
+        render_verdict(results)
 
 @app.command(name="interactive")
 def interactive_cmd():
@@ -194,15 +240,28 @@ def interactive_cmd():
     # Handle Remote URL on boot
     if current_repo.startswith(("http://", "https://", "git@")):
         import tempfile
-        import git
-        console.print(f"\n[cyan]Remote URL detected. Cloning into temporary cache...[/cyan]")
+        import subprocess
+        console.print(f"\n[cyan]Remote URL detected. Cloning last 50 commits (shallow)...[/cyan]")
+        console.print("[dim]This may take 5-30 seconds depending on network speed.[/dim]")
         try:
             temp_dir = tempfile.mkdtemp(prefix="sniff_")
-            git.Repo.clone_from(current_repo, temp_dir)
-            current_repo = temp_dir
-            console.print(f"[green]✔ Cloned successfully![/green]\n")
+            result = subprocess.run(
+                ["git", "clone", "--depth", "50", "--single-branch", current_repo, temp_dir],
+                capture_output=False,
+                timeout=90
+            )
+            if result.returncode == 0:
+                current_repo = temp_dir
+                console.print(f"[green]✔ Cloned successfully![/green]\n")
+            else:
+                console.print(f"[red]Clone failed (exit code {result.returncode}). Check the URL and try again.[/red]")
+                current_repo = "."
+        except subprocess.TimeoutExpired:
+            console.print(f"[red]Clone timed out after 90 seconds. The repository may be too large or network is too slow.[/red]")
+            console.print("[yellow]Tip: Clone the repo manually and use 'cd /path/to/local/clone' instead.[/yellow]")
+            current_repo = "."
         except Exception as e:
-            console.print(f"[red]Error cloning repository: {e}[/red]")
+            console.print(f"[red]Error: {e}[/red]")
             current_repo = "."
             
     # Verify Connection
@@ -261,15 +320,27 @@ def interactive_cmd():
                 # Handle Remote URL in `cd` command
                 if new_path.startswith(("http://", "https://", "git@")):
                     import tempfile
-                    import git
-                    console.print(f"\n[cyan]Remote URL detected. Cloning into temporary cache...[/cyan]")
+                    import subprocess
+                    console.print(f"\n[cyan]Remote URL detected. Cloning last 50 commits (shallow)...[/cyan]")
+                    console.print("[dim]This may take 5-30 seconds depending on network speed.[/dim]")
                     try:
                         temp_dir = tempfile.mkdtemp(prefix="sniff_")
-                        git.Repo.clone_from(new_path, temp_dir)
-                        new_path = temp_dir
-                        console.print(f"[green]✔ Cloned successfully![/green]\n")
+                        result = subprocess.run(
+                            ["git", "clone", "--depth", "50", "--single-branch", new_path, temp_dir],
+                            capture_output=False,
+                            timeout=90
+                        )
+                        if result.returncode == 0:
+                            new_path = temp_dir
+                            console.print(f"[green]\u2714 Cloned successfully![/green]\n")
+                        else:
+                            console.print(f"[red]Clone failed. Check the URL and try again.[/red]")
+                            continue
+                    except subprocess.TimeoutExpired:
+                        console.print(f"[red]Clone timed out. Try cloning manually and use 'cd /local/path'.[/red]")
+                        continue
                     except Exception as e:
-                        console.print(f"[red]Error cloning repository: {e}[/red]")
+                        console.print(f"[red]Error: {e}[/red]")
                         continue
                         
                 if Path(new_path).exists():
