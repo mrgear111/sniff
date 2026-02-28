@@ -1,0 +1,16 @@
+README.md
+setup.py
+sniff_cli/__init__.py
+sniff_cli/git_client.py
+sniff_cli/main.py
+sniff_cli/ui.py
+sniff_cli.egg-info/PKG-INFO
+sniff_cli.egg-info/SOURCES.txt
+sniff_cli.egg-info/dependency_links.txt
+sniff_cli.egg-info/entry_points.txt
+sniff_cli.egg-info/requires.txt
+sniff_cli.egg-info/top_level.txt
+sniff_cli/detectors/__init__.py
+sniff_cli/detectors/code.py
+sniff_cli/detectors/scoring.py
+sniff_cli/detectors/text.py
