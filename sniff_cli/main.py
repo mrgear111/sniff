@@ -254,9 +254,37 @@ def interactive_cmd(ctx: typer.Context):
         
     from sniff_cli.ui import clear_screen
     print_welcome()
-    
+
+    import os
+    import questionary
+
+    console.print("[bold cyan]Step 1: LLM Verification (Optional)[/bold cyan]")
+    use_llm_choice = questionary.select(
+        "Enable LLM Tie-Breaker Protocol for borderline commits?",
+        choices=[
+            "Yes (Requires Anthropic API Key)",
+            "No (Pure Offline Mode)"
+        ]
+    ).ask()
+
+    global_use_llm = True
+    if use_llm_choice and "No" in use_llm_choice:
+        global_use_llm = False
+    elif use_llm_choice:
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            api_key = questionary.password("Enter Anthropic API Key (sk-ant-...):").ask()
+            if api_key:
+                os.environ["ANTHROPIC_API_KEY"] = api_key.strip()
+            else:
+                console.print("[yellow]No API key provided. Falling back to Pure Offline Mode.[/yellow]")
+                global_use_llm = False
+    else:
+        # User hit Ctrl+C on the prompt
+        return
+
+    console.print()
     # Guided Repository Selection
-    console.print("\n[bold cyan]Step 1: Connect Repository[/bold cyan]")
+    console.print("[bold cyan]Step 2: Connect Repository[/bold cyan]")
     try:
         repo_input = input("Enter the path or URL to the Git repository (Leave blank for current directory): ").strip()
     except EOFError:
@@ -398,7 +426,10 @@ def interactive_cmd(ctx: typer.Context):
                 parts = [p for p in parts if p != "--no-llm"]
                 count = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 10
                 console.print()
-                scan_cmd(path=current_repo, count=count, export_json=False, no_llm=no_llm_flag)
+                
+                # If the user explicitly passed the flag, respect it for this run. Otherwise use the global session choice.
+                run_without_llm = True if no_llm_flag else (not global_use_llm)
+                scan_cmd(path=current_repo, count=count, export_json=False, no_llm=run_without_llm)
                 
             elif command.startswith("stats"):
                 parts = command.split()
@@ -406,7 +437,9 @@ def interactive_cmd(ctx: typer.Context):
                 parts = [p for p in parts if p != "--no-llm"]
                 count = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 50
                 console.print()
-                stats_cmd(path=current_repo, count=count, export_json=False, no_llm=no_llm_flag)
+                
+                run_without_llm = True if no_llm_flag else (not global_use_llm)
+                stats_cmd(path=current_repo, count=count, export_json=False, no_llm=run_without_llm)
                 
             elif command == "theme":
                 # Simulated theme selector for the pitch
