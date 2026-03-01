@@ -125,17 +125,16 @@ def _get_analysis_data(path: str, count: int, use_llm: bool = True):
     return results, None
 
 
-@app.command(name="scan")
 def scan_cmd(
-    path: str = typer.Option(".", help="Path to the Git repository"), 
-    count: int = typer.Option(10, help="Number of commits to scan"),
-    export_json: bool = typer.Option(False, "--json", help="Export results as JSON"),
-    no_llm: bool = typer.Option(False, "--no-llm", help="Disable LLM tie-breaker (pure local engines)")
+    path: str = ".",
+    count: int = 10,
+    export_json: bool = False,
+    no_llm: bool = False
 ):
     """Scan a repository and compute an AI-Likelihood Score for recent commits."""
     if not export_json:
         display_scan_progress(count)
-        
+
     results, err = _get_analysis_data(path, count, use_llm=not no_llm)
     if err:
         if export_json:
@@ -162,12 +161,11 @@ def scan_cmd(
         render_trend_chart(results)
         render_verdict(results)
 
-@app.command(name="stats")
 def stats_cmd(
-    path: str = typer.Option(".", help="Path to the Git repository"), 
-    count: int = typer.Option(50, help="Number of commits to analyze for stats"),
-    export_json: bool = typer.Option(False, "--json", help="Export results as JSON"),
-    no_llm: bool = typer.Option(False, "--no-llm", help="Disable LLM tie-breaker (pure local engines)")
+    path: str = ".", 
+    count: int = 50,
+    export_json: bool = False,
+    no_llm: bool = False
 ):
     """Generate repository-level AI usage analytics and an author leaderboard."""
     if not export_json:
@@ -195,11 +193,25 @@ def stats_cmd(
     leaderboard = []
     for a, data in authors.items():
         avg = data["sum_score"] / data["total_commits"]
+        ai_density = data["high_ai"] / data["total_commits"]
+        
+        # Build colored density string
+        pct_color = "red" if ai_density >= 0.15 else "yellow" if ai_density > 0 else "green"
+        density_str = f"[{pct_color}]{int(ai_density * 100)}%[/{pct_color}]"
+        
+        # Build Heat Bar (10 blocks)
+        total_blocks = 10
+        filled = int(avg * total_blocks)
+        empty = total_blocks - filled
+        bar = f"[{pct_color}]{'█' * filled}[/{pct_color}][dim]{'▬' * empty}[/dim]"
+        
         leaderboard.append({
             "author": a,
             "commits_analyzed": data["total_commits"],
             "avg_score": round(avg, 3),
-            "high_ai_commits": data["high_ai"]
+            "high_ai_commits": data["high_ai"],
+            "ai_density": density_str,
+            "bar": bar
         })
     
     # Sort by avg score descending
@@ -228,18 +240,18 @@ def stats_cmd(
             
         high_ai = str(lb["high_ai_commits"]) if lb["high_ai_commits"] > 0 else "[dim]0[/dim]"
         
-        table.add_row(rank, author, commits_num, avg_str, high_ai)
+        table.add_row(rank, author, commits_num, high_ai, avg_str, lb["ai_density"], lb["bar"])
 
+    console.print()
     console.print(table)
-    
-    # Render overall repo trend chart
-    if not export_json:
-        render_trend_chart(results)
-        render_verdict(results)
+    console.print()
 
-@app.command(name="interactive")
-def interactive_cmd():
+@app.callback(invoke_without_command=True)
+def interactive_cmd(ctx: typer.Context):
     """Start an interactive Claude-like persistent REPL session."""
+    if ctx.invoked_subcommand is not None:
+        return
+        
     from sniff_cli.ui import clear_screen
     print_welcome()
     
@@ -266,8 +278,14 @@ def interactive_cmd():
                 timeout=90
             )
             if result.returncode == 0:
-                current_repo = temp_dir
-                console.print(f"[green]✔ Cloned successfully![/green]\n")
+                # Find the actual nested .git folder dropped inside the temporary directory
+                cloned_repos = [f.parent for f in Path(temp_dir).rglob(".git") if f.is_dir()]
+                if cloned_repos:
+                    current_repo = str(cloned_repos[0])
+                    console.print(f"[green]✔ Cloned successfully![/green]\n")
+                else:
+                    console.print("[red]Clone succeeded but no .git directory was found.[/red]")
+                    current_repo = "."
             else:
                 console.print(f"[red]Clone failed (exit code {result.returncode}). Check the URL and try again.[/red]")
                 current_repo = "."
@@ -279,11 +297,16 @@ def interactive_cmd():
             console.print(f"[red]Error: {e}[/red]")
             current_repo = "."
             
-    # Verify Connection
+    # Validate the directory contains a Git repo
     try:
-        get_repo(current_repo)
-        console.print(f"[bold green]✔ Success![/bold green] Connected to repository at '{current_repo}'\n")
+        repo = get_repo(current_repo)
+        if not repo:
+            raise ValueError()
+            
+        repo_name = Path(current_repo).resolve().name
+        console.print(f"\n[bold green]✔ Connected to repository:[/bold green] [cyan]{repo_name}[/cyan]")
         console.print("[dim]Type 'scan' to analyze recent commits, 'stats' for a contributor leaderboard, or 'help' for commands.[/dim]\n")
+        console.print("[dim]Tip: You can use 'cd <path>' anytime to switch to a different repository.[/dim]\n")
     except Exception as e:
         console.print(f"[red]Warning: Could not detect a valid Git repository at '{current_repo}'[/red]")
         console.print("[yellow]Starting shell anyway. You can use 'cd <path>' later to switch repositories.[/yellow]\n")
@@ -346,8 +369,13 @@ def interactive_cmd():
                             timeout=90
                         )
                         if result.returncode == 0:
-                            new_path = temp_dir
-                            console.print(f"[green]\u2714 Cloned successfully![/green]\n")
+                            cloned_repos = [f.parent for f in Path(temp_dir).rglob(".git") if f.is_dir()]
+                            if cloned_repos:
+                                new_path = str(cloned_repos[0])
+                                console.print(f"[green]✔ Cloned successfully![/green]\n")
+                            else:
+                                console.print("[red]Clone succeeded but no .git directory was found.[/red]")
+                                continue
                         else:
                             console.print(f"[red]Clone failed. Check the URL and try again.[/red]")
                             continue
@@ -404,10 +432,7 @@ def interactive_cmd():
             console.print(f"[bold red]An unexpected error occurred:[/bold red] {e}")
 
 def main():
-    if len(sys.argv) == 1:
-        interactive_cmd()
-    else:
-        app()
+    app()
 
 if __name__ == "__main__":
     main()

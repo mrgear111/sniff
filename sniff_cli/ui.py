@@ -73,14 +73,16 @@ def build_stats_table(repo_name: str) -> Table:
         title=f"Repository AI Stats: {repo_name}", 
         show_header=True, 
         header_style="bold cyan",
-        box=box.MINIMAL_DOUBLE_HEAD,
+        box=box.MINIMAL_HEAVY_HEAD,
         expand=True
     )
     table.add_column("Rank", style="dim", width=6)
     table.add_column("Author", width=25)
     table.add_column("Commits Analyzed", justify="center")
-    table.add_column("Avg AI Score", justify="center")
     table.add_column("High-AI Commits (>0.7)", justify="center", style="red")
+    table.add_column("Avg AI Score", justify="center")
+    table.add_column("AI Density %", justify="center", style="bold")
+    table.add_column("Severity Bar", justify="left")
     return table
 
 def render_verdict(results: list):
