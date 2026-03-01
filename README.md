@@ -48,13 +48,13 @@ Existing approaches rely on simple keyword matching (fragile) or fully black-box
 
 ---
 
-## 3. Solution: Tri-Engine ML Architecture
+## 3. Solution: Six-Engine ML Architecture
 
-Sniff uses a **three-signal hybrid detection pipeline** to compute a final probabilistic AI-likelihood score for every commit.
+Sniff uses a **hybrid detection pipeline** consisting of 6 deterministic and statistical offline engines, combined with an optional prompt-engineered Claude API tie-breaker.
 
 ### Engine 1: Text Perplexity (NLP)
 - Uses a local **HuggingFace GPT-2** model to calculate the log-probability perplexity of commit messages.
-- LLMs produce mathematically "perfect" text (low perplexity). Human writing is chaotic and bursty (high perplexity).
+- LLMs produce mathematically "perfect" text (low perplexity). Human writing is chaotic and bursty.
 - **Flag:** Perplexity < 30 → Score: 0.9
 
 ### Engine 2: Code AST Entropy (Structural)
@@ -66,11 +66,25 @@ Sniff uses a **three-signal hybrid detection pipeline** to compute a final proba
 ### Engine 3: Behavioral Velocity (Metadata)
 - Cross-references **Lines of Code added per minute** by parsing GitPython commit timestamps.
 - Flags physically impossible typing speeds (> 50 LPM).
-- **Flag:** Velocity > 50 LPM → Instant +0.4 boost to final score.
+
+### Engine 4: Semantic Alignment (Embeddings)
+- Uses **Sentence Transformers (`all-MiniLM-L6-v2`)** to measure the cosine similarity between the commit text and the raw code diff.
+- AI often perfectly describes exactly what the code does (high similarity). Humans are notoriously lazy (low similarity).
+
+### Engine 5: Author Baseline (Z-Scores)
+- Dynamically calculates the historical commit size for the current author.
+- Flags massive multi-file PRs that break their own standard deviation (z > 3.0σ).
+
+### Engine 6: SimHash Similarity
+- Computes highly optimized, locality-sensitive hashes of the code diff.
+- Flags developers who are committing code that is mathematically identical (85%+) to previous diffs—a strong signal of AI template copy-pasting.
+
+### LLM Tie-Breaker (Optional)
+If the 6 local engines return a "Borderline" score (0.35 to 0.50), Sniff will securely package the commit and send it to **Anthropic Claude 4.6 Sonnet** for a deterministic tie-breaker verification.
 
 ### Score Aggregation
 ```
-final_score = (text × 0.4) + (code × 0.4) + (velocity × 0.2) + amplification_boost
+final_score = weighted_average(text, code, structural, semantic, baseline, simhash) + velocity_boost
 ```
 - Results in a deterministic, explainable AI-likelihood band: **Likely Human / Mixed / Likely AI-Assisted**
 
@@ -78,13 +92,32 @@ final_score = (text × 0.4) + (code × 0.4) + (velocity × 0.2) + amplification_
 
 ## 4. System Architecture
 
-```
-User → [sniff interactive] → Theme Selector → Repository Connect
-     → Git Graph Extraction (GitPython)
-     → Text Perplexity Engine (GPT-2 local)
-     → AST Code Entropy Engine (Python ast)
-     → Velocity Behavioral Engine (timestamps)
-     → Score Aggregation → Rich Dashboard + Plotille Charts
+```mermaid
+graph TD
+    A[Raw Commit Data] --> B{LLM Token Found?}
+    
+    %% Local Engines
+    B -->|Offline Mode| C[SimHash Similarity Engine]
+    B -->|Verified Mode| C
+    
+    C --> D[AST Syntax Entropy]
+    D --> E[Velocity Baseline]
+    E --> F[Semantic Scoring]
+    
+    F --> G{Final ML Score}
+    
+    %% Output Logic
+    G -->|Score > 0.50| H((AI-Assisted))
+    G -->|Score < 0.35| I((Human Written))
+    
+    %% LLM Tie Breaker
+    G -->|Score: 0.35 - 0.50| J{LLM Key Active?}
+    J -->|Yes| K[Anthropic Claude API]
+    J -->|No| L((Mixed))
+    
+    K --> M{Claude Verification}
+    M -->|AI Hallmarks| H
+    M -->|Human Quirks| I
 ```
 
 Sniff is **stateless** and requires no external database. All analysis runs in-memory.
@@ -95,51 +128,51 @@ Sniff is **stateless** and requires no external database. All analysis runs in-m
 
 | Layer | Technology |
 |---|---|
-| Language | Python 3.10+ |
-| CLI Framework | Typer |
+| Language | Python 3.9+ |
+| CLI Framework | Typer / Questionary |
 | UI & Layout | Rich (Tables/Panels) |
-| ASCII Charts | Plotille |
-| ASCII Typography | PyFiglet |
+| ASCII Charts | Plotille / PyFiglet |
 | Git Data | GitPython |
 | NLP Model | HuggingFace Transformers (GPT-2) |
-| Code Parsing | Python `ast` |
+| Semantic Engine | Sentence Transformers |
 | ML Backend | PyTorch |
+| Verification API | Anthropic API |
 
 ---
 
 ## 6. Installation
 
+The easiest way to globally install the Sniff engine is via PyPI:
 ```bash
-git clone https://github.com/mrgear111/sniff.git
-cd sniff
-python -m venv venv
-source venv/bin/activate
-pip install -e .
+pip install sniff-cli
+```
+
+*(Optional)* To enable the LLM tie-breaker protocol, export your Anthropic key:
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
 ---
 
 ## 7. Usage
 
-### Interactive REPL
+Sniff operates purely inside a unified, persistent terminal session. Start the engine by typing:
 ```bash
-sniff interactive
+sniff
 ```
+
+During startup, Sniff will prompt you to select your LLM settings, and then ask for the target repository. You can pass a local filepath (`.`) or a Remote GitHub URL (`https://github.com/mrgear111/sniff`).
+
+### Interactive Commands
+Once inside the `sniff>` REPL shell, type these commands natively:
 
 | Command | Description |
 |---|---|
-| `cd <path or url>` | Switch repo. Pastes GitHub URLs auto-clone to a local cache |
-| `scan [count]` | Analyze the N most recent commits. Default: 10 |
-| `stats [count]` | View contributor AI leaderboard. Default: 50 |
-| `theme` | Switch syntax color theme (Dark / Light / Colorblind) |
-| `clear` | Clear the terminal |
-| `exit` | Quit the session |
-
-### Headless / CI Mode
-```bash
-sniff scan --path /path/to/repo --json
-sniff stats --path /path/to/repo --json
-```
+| `scan [count]` | Analyze the N most recent commits (Default: 10). Pass `--no-llm` to bypass Anthropic for this run. |
+| `stats [count]` | Analyze codebase and view the AI-Density Contributor Leaderboard. |
+| `cd <path/url>` | Dynamically switch to a new local directory or remote GitHub URL workspace. |
+| `clear` | Clear the terminal screen |
+| `exit` | Quit the active session |
 
 ---
 
