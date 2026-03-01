@@ -73,30 +73,38 @@ cd https://github.com/vercel/next.js
 
 The detection protocol runs every commit through a layered sequence of 6 analysis engines:
 
-```mermaid
-graph TD
-    A[Raw Commit Data] --> B{LLM Token Found?}
-    
-    %% Local Engines Execution (Always Runs)
-    B -->|Local Offline Mode| C[SimHash Similarity Engine]
-    B -->|Verified Mode| C
-    
-    C --> D[AST Syntax Entropy]
-    D --> E[Velocity Outlier Baseline]
-    E --> F[Semantic NLP Scoring]
-    
-    F --> G{Final ML Score}
-    
-    %% Output Logic
-    G -->|Score > 0.50| H((AI-Assisted))
-    G -->|Score < 0.35| I((Human Written))
-    
-    %% LLM Tie Breaker Logic 
-    G -->|Score: 0.35 - 0.50| J{LLM Key Active?}
-    J -->|Yes| K[Anthropic Claude API]
-    J -->|No| L((Uncertain / Mixed))
-    
-    K --> M{Claude Verification}
-    M -->|AI Hallmarks Found| H
-    M -->|Human Quirks Found| I
+```
+             [Raw Commit Data]
+                    │
+                    ▼
+          (Local Offline Mode)
+    ┌───────────────────────────────────┐
+    │ 1. SimHash Similarity Engine      │
+    │ 2. AST Syntax Entropy Engine      │
+    │ 3. Velocity Baseline Tracker      │
+    │ 4. Semantic NLP Scoring Engine    │
+    │ 5. Text Perplexity Engine         │
+    │ 6. Author Z-Score Baseline        │
+    └─────────────────┬─────────────────┘
+                      │
+                      ▼
+               [Final ML Score]
+                      │
+         ┌────────────┼────────────┐
+         ▼            ▼            ▼
+      > 0.50     0.35 - 0.50     < 0.35
+   (AI-Assisted) (Borderline) (Human Written)
+                      │
+                      ▼
+               LLM Key Active?
+             ┌────────┴────────┐
+            Yes                No
+             ▼                 ▼
+   [Anthropic API]          (Mixed)
+             │
+      Claude Checks
+   ┌─────────┴─────────┐
+ AI Hallmarks      Human Quirks
+   ▼                   ▼
+(AI-Assisted)     (Human Written)
 ```

@@ -92,32 +92,40 @@ final_score = weighted_average(text, code, structural, semantic, baseline, simha
 
 ## 4. System Architecture
 
-```mermaid
-graph TD
-    A[Raw Commit Data] --> B{LLM Token Found?}
-    
-    %% Local Engines
-    B -->|Offline Mode| C[SimHash Similarity Engine]
-    B -->|Verified Mode| C
-    
-    C --> D[AST Syntax Entropy]
-    D --> E[Velocity Baseline]
-    E --> F[Semantic Scoring]
-    
-    F --> G{Final ML Score}
-    
-    %% Output Logic
-    G -->|Score > 0.50| H((AI-Assisted))
-    G -->|Score < 0.35| I((Human Written))
-    
-    %% LLM Tie Breaker
-    G -->|Score: 0.35 - 0.50| J{LLM Key Active?}
-    J -->|Yes| K[Anthropic Claude API]
-    J -->|No| L((Mixed))
-    
-    K --> M{Claude Verification}
-    M -->|AI Hallmarks| H
-    M -->|Human Quirks| I
+```
+             [Raw Commit Data]
+                    │
+                    ▼
+          (Local Offline Mode)
+    ┌───────────────────────────────────┐
+    │ 1. SimHash Similarity Engine      │
+    │ 2. AST Syntax Entropy Engine      │
+    │ 3. Velocity Baseline Tracker      │
+    │ 4. Semantic NLP Scoring Engine    │
+    │ 5. Text Perplexity Engine         │
+    │ 6. Author Z-Score Baseline        │
+    └─────────────────┬─────────────────┘
+                      │
+                      ▼
+               [Final ML Score]
+                      │
+         ┌────────────┼────────────┐
+         ▼            ▼            ▼
+      > 0.50     0.35 - 0.50     < 0.35
+   (AI-Assisted) (Borderline) (Human Written)
+                      │
+                      ▼
+               LLM Key Active?
+             ┌────────┴────────┐
+            Yes                No
+             ▼                 ▼
+   [Anthropic API]          (Mixed)
+             │
+      Claude Checks
+   ┌─────────┴─────────┐
+ AI Hallmarks      Human Quirks
+   ▼                   ▼
+(AI-Assisted)     (Human Written)
 ```
 
 Sniff is **stateless** and requires no external database. All analysis runs in-memory.
