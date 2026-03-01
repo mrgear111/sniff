@@ -74,37 +74,30 @@ cd https://github.com/vercel/next.js
 The detection protocol runs every commit through a layered sequence of 6 analysis engines:
 
 ```
-             [Raw Commit Data]
-                    │
-                    ▼
-          (Local Offline Mode)
-    ┌───────────────────────────────────┐
-    │ 1. SimHash Similarity Engine      │
-    │ 2. AST Syntax Entropy Engine      │
-    │ 3. Velocity Baseline Tracker      │
-    │ 4. Semantic NLP Scoring Engine    │
-    │ 5. Text Perplexity Engine         │
-    │ 6. Author Z-Score Baseline        │
-    └─────────────────┬─────────────────┘
-                      │
-                      ▼
-               [Final ML Score]
-                      │
-         ┌────────────┼────────────┐
-         ▼            ▼            ▼
-      > 0.50     0.35 - 0.50     < 0.35
-   (AI-Assisted) (Borderline) (Human Written)
-                      │
-                      ▼
-               LLM Key Active?
-             ┌────────┴────────┐
-            Yes                No
-             ▼                 ▼
-   [Anthropic API]          (Mixed)
-             │
-      Claude Checks
-   ┌─────────┴─────────┐
- AI Hallmarks      Human Quirks
-   ▼                   ▼
-(AI-Assisted)     (Human Written)
+┌──────────────────┐               ┌──────────────────┐               ┌──────────────────┐
+│  Your Terminal   │               │ Sniff ML Engines │               │   Claude Model   │
+│   (Sniff CLI)    │               │    (Offline)     │               │ (Anthropic API)  │
+└────────┬─────────┘               └────────┬─────────┘               └────────┬─────────┘
+         │                                  │                                  │
+         │ 1. Run `scan` command            │                                  │
+         │─────────────────────────────────>│                                  │
+         │ Payload: [Git Commits + Diffs]   │                                  │
+         │                                  │ 2. Sequence Offline Analyzers    │
+         │                                  │─┐                                │
+         │                                  │<┘                                │
+         │                                  │ 3. Score Evaluated (e.g. 0.45)   │
+         │                                  │─┐                                │
+         │                                  │<┘                                │
+         │                                  │ 4. Ask: "Is this AI or Human?"   │
+         │                                  │─────────────────────────────────>│
+         │                                  │                                  │
+         │                                  │ 5. "Verdict: AI-Assisted"        │
+         │                                  │<┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│
+         │ 6. Display Dashboard Result      │                                  │
+         │<┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│                                  │
+         │                                  │                                  │
+┌────────┴─────────┐               ┌────────┴─────────┐               ┌────────┴─────────┐
+│  Your Terminal   │               │ Sniff ML Engines │               │   Claude Model   │
+│   (Sniff CLI)    │               │    (Offline)     │               │ (Anthropic API)  │
+└──────────────────┘               └──────────────────┘               └──────────────────┘
 ```
