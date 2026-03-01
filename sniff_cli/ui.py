@@ -26,45 +26,42 @@ def print_welcome():
     
     # Generate the banner but print it instantly
     ascii_banner = pyfiglet.figlet_format("SNIFF", font="slant")
-    console.print(f"[bold magenta]{ascii_banner}[/bold magenta]")
-    console.print("[dim]" + "─" * 80 + "[/dim]\n")
+    console.print(f"[bold cyan]{ascii_banner}[/bold cyan]", end="")
+    console.print("[dim]v1.0.0 | Terminal-Native AI Detection Engine[/dim]\n")
     
     # Animated typing for the welcome text
     type_text("Let's get started.", style="bold white", delay=0.03)
-    time.sleep(0.3)
+    time.sleep(0.1)
     
-    console.print("\n[bold white]Choose the text style that looks best with your terminal[/bold white]")
-    console.print("[dim]To change this later, type 'theme' in the REPL[/dim]\n")
+    console.print("\n[dim]" + "─" * 60 + "[/dim]")
     
-    import questionary
-    theme = questionary.select(
-        "",
-        choices=[
-            "Dark mode ✓",
-            "Light mode",
-            "Dark mode (colorblind-friendly)",
-            "Light mode (colorblind-friendly)",
-            "Dark mode (ANSI colors only)",
-            "Light mode (ANSI colors only)"
-        ],
-        qmark=">"
-    ).ask()
+    # Simulated sleek boot sequence
+    boot_sequence = [
+        ("Checking for local Git repository...", "[green]Found[/green]"),
+        ("Loading 4-cylinder offline engines...", "[green]OK[/green]"),
+        ("Loading structural parsing models...", "[green]OK[/green]"),
+        ("Mounting LLM tie-breaker protocol...", "[cyan]Ready[/cyan]"),
+    ]
     
-    console.print("[dim]" + "─" * 80 + "[/dim]")
+    for message, status in boot_sequence:
+        console.print(f"[dim]>[/dim] {message:<40} {status}")
+        time.sleep(0.08)
+        
+    console.print("[dim]" + "─" * 60 + "[/dim]\n")
     
-    # Code Preview Block
-    console.print("[dim]1[/dim]  [cyan]def[/cyan] [green]analyze_commit[/green]():")
-    console.print("[on red][white]2 -     print(\"Likely Human!\")[/white][/on red]")
-    console.print("[on green][white]2 +     print(\"Likely AI!\")[/white][/on green]")
-    console.print("[dim]3[/dim]  }")
-    
-    console.print("[dim]" + "─" * 80 + "[/dim]")
-    console.print("[dim]Syntax theme: Sniff Default (ctrl+t to disable)[/dim]\n")
-    
-    time.sleep(0.5)
+    console.print("[bold white]System Online. Type 'scan' to analyze recent commits.[/bold white]\n")
+    time.sleep(0.2)
+
+import rich.box as box
 
 def build_results_table(count: int) -> Table:
-    table = Table(title=f"Last {count} Commits AI Analysis", show_header=True, header_style="bold magenta")
+    table = Table(
+        title=f"Last {count} Commits AI Analysis", 
+        show_header=True, 
+        header_style="bold cyan",
+        box=box.MINIMAL_DOUBLE_HEAD,
+        expand=True
+    )
     table.add_column("Commit Hash", style="dim", width=12)
     table.add_column("Author", width=20)
     table.add_column("AI Score", justify="center", width=25)
@@ -72,11 +69,17 @@ def build_results_table(count: int) -> Table:
     return table
 
 def build_stats_table(repo_name: str) -> Table:
-    table = Table(title=f"Repository AI Stats: {repo_name}", show_header=True, header_style="bold cyan")
+    table = Table(
+        title=f"Repository AI Stats: {repo_name}", 
+        show_header=True, 
+        header_style="bold cyan",
+        box=box.MINIMAL_DOUBLE_HEAD,
+        expand=True
+    )
     table.add_column("Rank", style="dim", width=6)
     table.add_column("Author", width=25)
     table.add_column("Commits Analyzed", justify="center")
-    table.add_column("Average AI Score", justify="center")
+    table.add_column("Avg AI Score", justify="center")
     table.add_column("High-AI Commits (>0.7)", justify="center", style="red")
     return table
 
