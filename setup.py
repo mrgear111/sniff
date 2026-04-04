@@ -28,11 +28,13 @@ setup(
         "plotille>=5.0.0",
         "pyfiglet>=1.0.2",
         "anthropic",
-        "python-dotenv"
+        "python-dotenv",
+        "Flask>=3.0.0"
     ],
     entry_points={
         "console_scripts": [
             "sniff=sniff_cli.main:main",
+            "sniff-web=sniff_web.app:main",
         ],
     },
     classifiers=[

@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Any, Dict
 from anthropic import Anthropic
 import os
 import re
@@ -7,14 +7,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class LLMAnalyzer:
-    def __init__(self):
-        # We assume the user has set ANTHROPIC_API_KEY in their environment, or loaded via dotenv
-        self.api_key = os.environ.get("ANTHROPIC_API_KEY")
+    def __init__(self, api_key: str | None = None):
+        # Prefer an explicit key from the caller, then fall back to the environment.
+        self.api_key = (api_key or os.environ.get("ANTHROPIC_API_KEY") or "").strip()
         self.client = None
         if self.api_key:
             self.client = Anthropic(api_key=self.api_key)
 
-    def analyze(self, diff: str, message: str) -> Dict[str, any]:
+    def analyze(self, diff: str, message: str) -> Dict[str, Any]:
         """
         Sends the commit diff and message to Claude 4.6 Sonnet for a deterministic AI-detection tie-breaker.
         """
