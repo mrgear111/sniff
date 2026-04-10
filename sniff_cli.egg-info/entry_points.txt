@@ -1,2 +1,0 @@
-[console_scripts]
-sniff = sniff_cli.main:main

@@ -1,9 +1,15 @@
 # Sniff 🐕
-**Offline AI Contribution Detection Engine for Git Repositories**
+**AI Contribution Detection Engine for Git Repositories (CLI + Web)**
 
-Sniff is a terminal-native AI detection system designed to analyze Git repositories and estimate the likelihood that commits or code contributions were generated or heavily assisted by AI tools.
+Sniff is an AI detection system designed to analyze Git repositories and estimate the likelihood that commits or code contributions were generated or heavily assisted by AI tools.
 
-It combines deterministic structural analysis with a local Large Language Model (GPT-2 via HuggingFace) to provide explainable AI-likelihood scoring — all within a beautiful, interactive terminal interface. **100% offline. Zero cloud APIs. Your code never leaves your machine.**
+It combines deterministic structural analysis with a local Large Language Model (GPT-2 via HuggingFace) to provide explainable AI-likelihood scoring.
+
+You can use Sniff in two ways:
+- **Python CLI** (`sniff`) for interactive terminal workflows and local/remote repo analysis
+- **Web App (JavaScript)** (`sniff_web_js`) for browser-based demos and deployment
+
+The core detection approach is shared conceptually across both experiences.
 
 ---
 
@@ -130,9 +136,11 @@ Sniff is **stateless** and requires no external database. All analysis runs in-m
 
 | Layer | Technology |
 |---|---|
-| Language | Python 3.9+ |
+| Core ML / CLI Language | Python 3.9+ |
+| Web App Language | Node.js (JavaScript, Node 18+) |
 | CLI Framework | Typer / Questionary |
-| UI & Layout | Rich (Tables/Panels) |
+| CLI UI & Layout | Rich (Tables/Panels) |
+| Web UI/API | Express + Vanilla JS + HTML/CSS |
 | ASCII Charts | Plotille / PyFiglet |
 | Git Data | GitPython |
 | NLP Model | HuggingFace Transformers (GPT-2) |
@@ -142,7 +150,18 @@ Sniff is **stateless** and requires no external database. All analysis runs in-m
 
 ---
 
-## 6. Installation
+## 6. Project Structure
+
+Top-level folders:
+- `sniff_cli/` - Python CLI implementation and detection engines
+- `sniff_web_js/` - JavaScript web interface for browser usage and deployment
+- `demo_repo/` - Sample repository for testing
+
+---
+
+## 7. Installation
+
+### Python CLI
 
 The easiest way to globally install the Sniff engine is via PyPI:
 ```bash
@@ -154,9 +173,22 @@ pip install sniff-cli
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
+### Web App (JavaScript)
+
+```bash
+cd sniff_web_js
+npm install
+```
+
+Optional environment variables:
+- `GITHUB_TOKEN` (recommended for higher GitHub API rate limits)
+- `ANTHROPIC_API_KEY` (only needed for LLM tie-breaker mode)
+
 ---
 
-## 7. Usage
+## 8. Usage
+
+### CLI Usage
 
 Sniff operates purely inside a unified, persistent terminal session. Start the engine by typing:
 ```bash
@@ -178,6 +210,43 @@ Once inside the `sniff>` REPL shell, type these commands natively:
 
 ---
 
-## 8. Disclaimer
+### Web App Usage (Browser UI)
+
+Sniff now also includes a browser-based interface that reuses the same detection engines.
+
+Start the web app:
+```bash
+cd sniff_web_js
+npm run dev
+```
+
+Then open:
+```text
+http://localhost:8080
+```
+
+In the web UI, you can:
+- Enter a public GitHub repository URL
+- Set commit count to analyze
+- Optionally enable LLM tie-breaker mode
+- View commit-level scores and an author leaderboard in the browser
+
+For production-style local run:
+```bash
+npm start
+```
+
+---
+
+## 9. Deployment (Web App)
+
+The web app in `sniff_web_js` is designed to be deployable (for example on Render or Railway):
+- Build command: `npm install`
+- Start command: `npm start`
+- Root directory: `sniff_web_js`
+- Recommended env var: `GITHUB_TOKEN`
+- Optional env var: `ANTHROPIC_API_KEY`
+
+## 10. Disclaimer
 
 Sniff relies on statistical ML models and behavioral heuristics. It is a powerful auditing signal, not a definitive legal claim of AI generation. Results should always be reviewed by a human auditor before action is taken.

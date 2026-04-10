@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sniff</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="wrap">
+    <h1>Sniff</h1>
+
+    <section class="card">
+      <label>GitHub Repo URL</label>
+      <input id="repoUrl" type="text" placeholder="https://github.com/owner/repo">
+
+      <label>Commit Count (max 30)</label>
+      <input id="count" type="number" value="10" min="1" max="30">
+
+      <fieldset class="mode-switch">
+        <legend>Analysis Mode</legend>
+        <label class="mode-option">
+          <input type="radio" name="analysisMode" value="offline" checked>
+          Offline mode, heuristics only
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="analysisMode" value="llm">
+          LLM tie-breaker with my Anthropic API key
+        </label>
+      </fieldset>
+
+      <label id="apiKeyWrap" class="api-key-wrap hidden">Anthropic API Key
+        <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off">
+      </label>
+
+      <button id="analyzeBtn">Analyze</button>
+      <p id="status" class="status"></p>
+      <p id="modeNotice" class="notice hidden"></p>
+    </section>
+
+    <section id="summary" class="card hidden"></section>
+    <section id="results" class="card hidden"></section>
+    <section id="leaderboard" class="card hidden"></section>
+  </main>
+
+  <script src="/script.js"></script>
+</body>
+</html>
