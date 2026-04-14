@@ -45,6 +45,7 @@ Thumbs.db
 demo_repo/
 react-dashboard/
 sniff_web_js/node_modules/
+sniff_web_js/client/node_modules/
 sniff_web_js/.env
 sniff_web_js/.env.local
 *.log
