@@ -6,7 +6,9 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "build": "npm --prefix client run build",
+    "build:client": "npm --prefix client install && npm --prefix client run build"
   },
   "engines": {
     "node": ">=18"
